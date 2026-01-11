@@ -12,6 +12,9 @@
     <div iter>
         &nbsp;Thank "you, \{{names_iter}}!
     </div>
+    <ul iter.x={simple_collection}>
+        <li id="{{x.id}}">{{x.value}}</li>
+    </ul>
     <p>
         Yew template resists "code injection attackes\{{value}}
     </p>

@@ -21,6 +21,8 @@
 ```
 
 ```rust
+use yew_template::template_html;
+
 let html = template_html!("templates/hello.html", name="World");
 ```
 
@@ -55,6 +57,8 @@ let html = yew::html! {
 ### Variables
 
 ```rust
+use yew_template::template_html;
+
 let name = "World";
 let html = template_html!("templates/hello.html", name);
 ```
@@ -73,6 +77,8 @@ let html = yew::html! {
 When the name of your variable isn't the same as the name in the template, you can use the following syntax:
 
 ```rust
+use yew_template::template_html;
+
 let other_name = "Yew";
 let html = template_html!("templates/hello.html", name=other_name);
 ```
@@ -86,6 +92,8 @@ let html = template_html!("templates/hello.html", name=other_name);
 ```
 
 ```rust
+use yew_template::template_html;
+
 let html = template_html!(
     "templates/hello.html",
     name="Yew",
@@ -113,6 +121,8 @@ As when using the actual yew macro, you can just pass the struct and access its 
 ```
 
 ```rust
+use yew_template::template_html;
+
 struct Person {
     first_name: String,
     last_name: String,
@@ -128,6 +138,8 @@ let html = template_html!("templates/fields.html", person);
 ### Expressions
 
 ```rust
+use yew_template::template_html;
+
 let name_reversed = String::from("dlroW");
 let html = template_html!(
     "templates/hello.html",
@@ -168,7 +180,7 @@ Note that the curly brackets around expressions are required for expressions.
 </div>
 ```
 
-```rust
+```rust,ignore
 let link = ctx.link();
 let html = template_html!(
     "templates/hello.html",
@@ -238,6 +250,8 @@ Here, both `opt_age` and `opt_birth_city` are optional. `opt_age` would be displ
 From the Rust side, there is no usage difference. Note that curly brackets are required (for now).
 
 ```rust
+use yew_template::template_html;
+
 let opt_age: Option<u8> = Some(20);
 let opt_birth_city: Option<String> = None;
 let html = template_html!(
@@ -266,13 +280,49 @@ Elements can be given a `present-if` attribute. The value will be evaluated at r
 ```
 
 ```rust
+use yew_template::template_html;
+
 let html = template_html!("templates/present_if.html", condition={ 1+1==3 });
 ```
 
 ### Iterators
 
-Iterators work similarly to optional variables. The iterator variables are marked with an `iter_` prefix or an `_iter` suffix, at your option.
-The looping html element is marked with the `iter` attribute. The element will reproduce until one of the iterators it depends on is empty.
+Yew-template supports two iteration syntaxes:
+
+#### New Syntax (Recommended)
+
+The new syntax uses semantic variable names and follows patterns familiar from frameworks like Angular and Vue.
+The syntax is placed on an outer parent HTML tag and all elements are duplicated; syntactically this looks like a for loop.
+
+```hbs
+<div>
+    <h2>People:</h2>
+    <ul iter.person={people}>
+        <li>{{person.first_name}} {{person.last_name}}</li>
+    </ul>
+</div>
+```
+
+```rust
+use yew_template::template_html;
+
+#[derive(Clone, Copy)]
+struct Person {
+    first_name: &'static str,
+    last_name: &'static str,
+}
+
+let people = vec![
+    Person { first_name: "Alice", last_name: "Smith" },
+    Person { first_name: "Bob", last_name: "Jones" },
+];
+
+let html = template_html!("templates/people_iter.html", people={people.iter()}, ...);
+```
+
+#### Legacy Syntax
+
+The legacy syntax uses iterator variables marked with an `iter_` prefix or an `_iter` suffix. The looping html element is marked with the `iter` attribute. It will duplicate until one of its inner iterators stops. The important distinction is that the element with the `iter` attribute is duplicated.
 
 ```hbs
 <div>
@@ -284,17 +334,42 @@ The looping html element is marked with the `iter` attribute. The element will r
 ```
 
 ```rust
-let contributors = vec!["John", "Jane", "Jack"]; // Owned values need to be declared as `let` or they would be freed before the template is rendered.
+use yew_template::template_html;
+
+let contributors = vec!["John", "Jane", "Jack"];
 let html = template_html!(
-    "templates/iter.html",
+    "templates/hello.html",
+    name="World",
     contributors_iter = {contributors.iter()},
     commits_iter = {[42, 21, 7].iter()}
 );
 ```
 
+#### Field Access in Iterators
+
+You can access fields of structs in iterators using dot notation with both syntaxes:
+
+**Modern Syntax:**
+```hbs
+<ul>
+    <li iter.item={items}>ID: {{item.id}}, Value: {{item.value}}</li>
+</ul>
+```
+
+**Legacy Syntax:**
+```hbs
+<ul>
+    <li iter>ID: {{items_iter.id}}, Value: {{items_iter.value}}</li>
+</ul>
+```
+
+**Note**: When using field access with iterators, be mindful of Rust's ownership rules. Fields that implement `Copy` (like `i32`, `bool`, etc.) work seamlessly. For owned types like `String`, consider using references or ensuring proper ownership handling.
+
 The code above will act as the following for Yew:
 
 ```rust
+use yew::{html, Html};
+
 let contributors = vec!["John", "Jane", "Jack"];
 let html = yew::html! {
     <div>
@@ -327,6 +402,8 @@ The whole point of using this crate is making your code more readable than when 
 ```
 
 ```rust
+use yew_template::template_html;
+
 let name = "World";
 let html = template_html!("templates/hello.html", ...);
 ```
@@ -344,6 +421,8 @@ Yew-template often requires you to add attributes on html elements such as `iter
 ```
 
 ```rust
+use yew_template::template_html;
+
 let opt_name = Some("John".to_string());
 let html = template_html!("templates/virtual.html", opt_name);
 ```
