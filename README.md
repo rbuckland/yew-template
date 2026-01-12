@@ -336,7 +336,7 @@ The legacy syntax uses iterator variables marked with an `iter_` prefix or an `_
 ```rust
 use yew_template::template_html;
 
-let contributors = vec!["John", "Jane", "Jack"];
+let contributors = vec!["John", "Jane", "Jack"]; // Owned values need to be declared as `let` or they would be freed before the template is rendered.
 let html = template_html!(
     "templates/hello.html",
     name="World",

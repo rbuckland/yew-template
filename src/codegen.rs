@@ -188,7 +188,7 @@ pub(crate) fn element_to_code(el: Element, depth: usize, opts: &mut Vec<String>,
     // Handle iterated elements (old style only, new style handled earlier)
     match iter {
         true => {
-            // Old syntax: iter attribute with _iter suffix variables - element repeats
+            // Old syntax: iter attribute with _iter prefix/suffix variables - element repeats
             let before = inner_iters
                 .iter()
                 .map(|id| format!("let mut macro_produced_{id} = {};", args.get_val(id, &mut Vec::new(), &mut Vec::new(), args)))
