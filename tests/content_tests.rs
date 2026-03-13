@@ -3,6 +3,17 @@ use yew_template::*;
 use yew::prelude::*;
 use yew::ServerRenderer;
 
+/// Verifies that event-handler attributes (onclick, onchange, …) are emitted as-is
+/// and NOT wrapped in `.to_string()`, which would make them fail to compile.
+#[test]
+fn test_event_handler_attribute_not_coerced_to_string() {
+    let on_click = Callback::from(|_: MouseEvent| {});
+    // This must compile: the generated code should be  onclick={on_click}
+    // not  onclick={on_click.to_string()}  (Callback does not implement Display).
+    let _html = template_html!("templates/button_click.html", on_click, ...);
+    println!("✓ button_click.html event-handler attribute compiled successfully");
+}
+
 
 #[derive(Clone, Copy)]
 struct Person {

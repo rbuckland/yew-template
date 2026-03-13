@@ -287,11 +287,7 @@ let html = template_html!("templates/present_if.html", condition={ 1+1==3 });
 
 ### Iterators
 
-Yew-template supports two iteration syntaxes:
-
-#### New Syntax (Recommended)
-
-The new syntax uses semantic variable names and follows patterns familiar from frameworks like Angular and Vue.
+Iterators use semantic variable names following patterns familiar from frameworks like Angular and Vue.
 The syntax is placed on an outer parent HTML tag and all elements are duplicated; syntactically this looks like a for loop.
 
 ```hbs
@@ -320,76 +316,31 @@ let people = vec![
 let html = template_html!("templates/people_iter.html", people={people.iter()}, ...);
 ```
 
-#### Legacy Syntax
-
-The legacy syntax uses iterator variables marked with an `iter_` prefix or an `_iter` suffix. The looping html element is marked with the `iter` attribute. It will duplicate until one of its inner iterators stops. The important distinction is that the element with the `iter` attribute is duplicated.
-
-```hbs
-<div>
-    <h2>Contributors:</h2>
-    <ul>
-        <li iter>{{contributors_iter}} ({{commits_iter}} commits)</li>
-    </ul>
-</div>
-```
-
-```rust
-use yew_template::template_html;
-
-let contributors = vec!["John", "Jane", "Jack"]; // Owned values need to be declared as `let` or they would be freed before the template is rendered.
-let html = template_html!(
-    "templates/hello.html",
-    name="World",
-    contributors_iter = {contributors.iter()},
-    commits_iter = {[42, 21, 7].iter()}
-);
-```
-
 #### Field Access in Iterators
 
-You can access fields of structs in iterators using dot notation with both syntaxes:
+You can access fields of structs in iterators using dot notation:
 
-**Modern Syntax:**
 ```hbs
 <ul>
     <li iter.item={items}>ID: {{item.id}}, Value: {{item.value}}</li>
 </ul>
 ```
 
-**Legacy Syntax:**
-```hbs
-<ul>
-    <li iter>ID: {{items_iter.id}}, Value: {{items_iter.value}}</li>
-</ul>
-```
-
 **Note**: When using field access with iterators, be mindful of Rust's ownership rules. Fields that implement `Copy` (like `i32`, `bool`, etc.) work seamlessly. For owned types like `String`, consider using references or ensuring proper ownership handling.
 
-The code above will act as the following for Yew:
-
-```rust
-use yew::{html, Html};
-
-let contributors = vec!["John", "Jane", "Jack"];
-let html = yew::html! {
-    <div>
-        <h2>{"Contributors:"}</h2>
-        <ul>
-            {{
-                let mut contributors_iter = { contributors.iter() };
-                let mut commits_iter = { [42, 21, 7].iter() };
-                let mut fragments = Vec::new();
-                while let (Some(contributor), Some(commits)) = (contributors_iter.next(), commits_iter.next()) {
-                    fragments.push(html! { <li>{contributor}{" ("}{commits}{" commits)"}</li> });
-                }
-                fragments.into_iter().collect::<Html>()
-            }}
-        </ul>
-   </div>
-};
-```
-
 As of now, Yew item references in lists are not supported. This will be inmplemented in the future as the Yew documentation recommends, though the performance impact has been found to be negligible in most cases.
+
+### Simplified Design
+
+Embedding code in another language (e.g., SQL in Java, Bash in Python) is often considered a high-maintenance anti-pattern because it complicates syntax highlighting, hinders debugging, increases security risks (like SQL injection), and makes testing difficult. While useful for rapid prototyping or legacy code, it introduces technical debt, reduces readability, and hampers static analysis.
+
+This is the reason to use `yew-template`, to reduce complexity.
+
+**Key Reasons It Is an Anti-Pattern**
+- I**ncreased Complexity & Reduced Readability** Mixing languages forces developers to context-switch, making the code harder to read and maintain.
+- **Syntax and Debugging Issues** Embedded code often lacks proper IDE support, such as syntax highlighting, linting, and autocomplete, making errors harder to catch.
+- **Security Vulnerabilities** Embedded strings (like SQL) are prone to injection attacks if not properly sanitized.
+- **Testing Difficulties** It is challenging to unit test code that is embedded within a string in another language.
 
 ### Minimizing bloat
 
@@ -483,6 +434,7 @@ locale_code = 'locale.as_str()'
 
 # Two strings marking the beginning and end of a variable in a template.
 variable_separator = ["{{", "}}"]
+
 ```
 
 ## Features

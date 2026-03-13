@@ -72,9 +72,14 @@ pub(crate) fn attr_to_code((name, value): (String, String), opts: &mut Vec<Strin
             }
             let text_part_code = match &text_parts[0] {
                 TextPart::Expression(id) => {
-                    // For attributes, wrap the expression to ensure string conversion
                     let value = process_attribute_expression(id, opts, iters, args);
-                    format!("{{{value}.to_string()}}")
+                    // Event-handler attributes (onclick, onchange, oninput, …) carry callbacks,
+                    // not strings – wrapping them in `.to_string()` would cause a compile error.
+                    if name.starts_with("on") {
+                        format!("{{{value}}}")
+                    } else {
+                        format!("{{{value}.to_string()}}")
+                    }
                 }
                 _ => text_parts[0].to_code(opts, iters, args)
             };
