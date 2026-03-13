@@ -32,7 +32,7 @@ mod template_tests {
     #[test]
     fn test_opt_template() {
         let _html = template_html!(
-            "templates/opt.html", 
+            "templates/opt.html",
             name="Alice",
             opt_age={Some(25)},
             opt_birth_city={Some("Paris")},
@@ -57,7 +57,7 @@ mod template_tests {
     fn test_iter_template_old_syntax() {
         let contributors = vec!["Alice", "Bob", "Charlie"];
         let _html = template_html!(
-            "templates/legacy_iter.html", 
+            "templates/legacy_iter.html",
             contributors_iter={contributors.iter()},
             ...
         );
@@ -108,6 +108,12 @@ mod template_tests {
         let _iter = template_html!("templates/legacy_iter.html", contributors_iter={contributors.iter()}, ...);
         let _people = template_html!("templates/people_iter.html", people={people.iter()}, ...);
         let _simple = template_html!("templates/simple_iter.html", simple_items={items.iter()}, ...);
+        let loop_items = vec!["a", "b", "c"];
+        let _loop_vars = template_html!("templates/loop_vars.html", items={loop_items.iter()}, ...);
+        // Template inheritance
+        let _child = template_html!("templates/inheritance/child.html", title="Test", name="World", ...);
+        // Base template used directly (blocks render their default content)
+        let _base = template_html!("templates/inheritance/base.html", ...);
 
         println!(":: All templates compiled");
     }

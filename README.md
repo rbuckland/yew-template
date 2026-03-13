@@ -47,6 +47,7 @@ let html = yew::html! {
 - [Optional variables](#optional-variables)
 - [Optional elements](#optional-elements)
 - [Iterators](#iterators)
+- [Template inheritance](#template-inheritance)
 - [Minimizing bloat](#minimizing-bloat)
 - [Virtual elements](#virtual-elements)
 - [Localization](#localization)
@@ -328,6 +329,34 @@ You can access fields of structs in iterators using dot notation:
 
 **Note**: When using field access with iterators, be mindful of Rust's ownership rules. Fields that implement `Copy` (like `i32`, `bool`, etc.) work seamlessly. For owned types like `String`, consider using references or ensuring proper ownership handling.
 
+#### Loop Variables
+
+Inside an `iter.*` block, a set of special `loop.*` variables are available:
+
+| Variable | Description |
+|---|---|
+| `loop.index` | Current iteration (0-indexed) |
+| `loop.index1` | Current iteration (1-indexed) |
+| `loop.first` | `true` on the first iteration |
+| `loop.last` | `true` on the last iteration |
+| `loop.length` | Total number of items |
+| `loop.depth` | Nesting depth, 0-indexed (always `0` — recursive loops are not supported) |
+| `loop.depth1` | Nesting depth, 1-indexed (always `1`) |
+| `loop.previtem` | Item from the previous iteration (`Option<T>`), or `None` on the first |
+| `loop.nextitem` | Item from the next iteration (`Option<T>`), or `None` on the last |
+
+```hbs
+<ul iter.item={items}>
+    <li>
+        <span present-if={{loop.first}}>[first] </span>
+        {{loop.index1}}/{{loop.length}}: {{item}}
+        <span present-if={{loop.last}}> [last]</span>
+    </li>
+</ul>
+```
+
+`loop.first` and `loop.last` are booleans and work naturally with `present-if`. `loop.index` (0-based) and `loop.index1` (1-based) are `usize` and can be used directly in text content or converted with `.to_string()` in attribute values.
+
 As of now, Yew item references in lists are not supported. This will be inmplemented in the future as the Yew documentation recommends, though the performance impact has been found to be negligible in most cases.
 
 ### Simplified Design
@@ -341,6 +370,46 @@ This is the reason to use `yew-template`, to reduce complexity.
 - **Syntax and Debugging Issues** Embedded code often lacks proper IDE support, such as syntax highlighting, linting, and autocomplete, making errors harder to catch.
 - **Security Vulnerabilities** Embedded strings (like SQL) are prone to injection attacks if not properly sanitized.
 - **Testing Difficulties** It is challenging to unit test code that is embedded within a string in another language.
+
+### Template Inheritance
+
+Template inheritance lets you define a base layout once and override specific regions in child templates — the same pattern as Jinja's `{% extends %}` / `{% block %}`.
+
+**Base template** — define named `<block>` regions with optional default content:
+
+```hbs
+<!-- templates/layouts/base.html -->
+<div class="page">
+  <header><block name="header"><h1>Default Title</h1></block></header>
+  <main><block name="content"><p>No content provided.</p></block></main>
+  <footer><block name="footer"><p>Default Footer</p></block></footer>
+</div>
+```
+
+**Child template** — declare the parent with `<extends src="…"/>` and supply `<block>` overrides:
+
+```hbs
+<!-- templates/layouts/child.html -->
+<extends src="templates/layouts/base.html"/>
+<block name="header"><h1>{{title}}</h1></block>
+<block name="content"><p>Hello, {{name}}!</p></block>
+<!-- footer not overridden → renders base default -->
+```
+
+```rust
+use yew_template::template_html;
+
+let title = "My Page";
+let name  = "World";
+let html = template_html!("templates/layouts/child.html", title, name, ...);
+```
+
+Rules:
+- `<extends src="path"/>` must be self-closing.  The path follows the same convention as the first argument to `template_html!` (relative to `template_directory`).
+- Only `<block>` elements at the root level of a child template are considered; any other content outside a `<block>` is ignored.
+- Blocks not overridden by the child keep the base default content.
+- Inheritance chains are supported: a parent template can itself extend another template.
+- A base template can also be used directly with `template_html!` — blocks then render their default content transparently.
 
 ### Minimizing bloat
 

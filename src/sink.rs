@@ -79,5 +79,6 @@ pub(crate) fn read_template(args: &Args) -> Element {
         children: html_parts,
     };
     root.clean_text();
+    let root = resolve_inheritance(root, args);
     root
 }

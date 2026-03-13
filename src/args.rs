@@ -45,6 +45,27 @@ impl Args {
         }
 
         let (id, field) = (get_all_before(id, "."), get_all_after_strict(id, "."));
+
+        // Special handling for loop.* pseudo-variables (only valid inside iter.var={} loops)
+        if id == "loop" {
+            let field_name = match field {
+                Some(f) => f,
+                None => abort!(args.path_span, "\"loop\" must be used with a field, e.g. loop.index"),
+            };
+            return ValOutput::String(match field_name {
+                "index"     => "_yew_loop_index0".to_string(),
+                "index1"    => "_yew_loop_index".to_string(),
+                "first"     => "_yew_loop_first".to_string(),
+                "last"      => "_yew_loop_last".to_string(),
+                "length"    => "_yew_loop_length".to_string(),
+                "depth"     => "0usize".to_string(),
+                "depth1"    => "1usize".to_string(),
+                "previtem"  => "_yew_loop_previtem".to_string(),
+                "nextitem"  => "_yew_loop_nextitem".to_string(),
+                _ => abort!(args.path_span, "Unknown loop variable \"loop.{field_name}\""),
+            });
+        }
+
         if id.chars().any(|c| !c.is_alphanumeric() && c != '_') {
             abort!(args.path_span, "Invalid identifier: {id:?} in template {}", args.path);
         }
@@ -80,7 +101,7 @@ impl Args {
 
 pub(crate) fn parse_args(args: TokenStream) -> Args {
     let config = config::read_config();
-    
+
     let mut tokens = args.into_iter().peekable();
     let _ = tokens.peek();
 

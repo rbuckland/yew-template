@@ -1,0 +1,11 @@
+<div>
+  <h3>index / index1 / length</h3>
+  <ul iter.item={items}>
+    <li>{{loop.index}} / {{loop.index1}} of {{loop.length}} — {{item}}</li>
+  </ul>
+
+  <h3>first and last</h3>
+  <ul iter.item={items}>
+    <li><span present-if={{loop.first}}>[first] </span>{{item}}<span present-if={{loop.last}}> [last]</span></li>
+  </ul>
+</div>

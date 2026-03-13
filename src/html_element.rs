@@ -1,6 +1,6 @@
 use crate::*;
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub(crate) enum HtmlPart {
     Text(String),
     Element(Element),
@@ -16,13 +16,13 @@ impl HtmlPart {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub(crate) struct HtmlPartWithLine {
     pub(crate) part: HtmlPart,
     pub(crate) line: usize,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub(crate) struct Element {
     pub(crate) name: String,
     pub(crate) self_closing: bool,
