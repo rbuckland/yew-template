@@ -1,0 +1,9 @@
+<div>
+  <ul iter.outer={outers} loop_var="outer_loop">
+    <li>outer={{outer_loop.index1}} depth={{outer_loop.depth}}
+      <ul iter.inner={inners} loop_var="inner_loop">
+        <li>inner={{inner_loop.index1}} depth={{inner_loop.depth}} outer={{outer_loop.index1}}</li>
+      </ul>
+    </li>
+  </ul>
+</div>

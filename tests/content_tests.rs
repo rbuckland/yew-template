@@ -55,6 +55,43 @@ async fn test_template_inheritance() {
     assert!(base_rendered.contains("Default Footer"),    "direct base use renders default footer");
 }
 
+// ── nested loop tests ─────────────────────────────────────────────────────────
+
+#[function_component]
+fn NestedLoopApp() -> Html {
+    let outers = vec!["A", "B"];
+    let inners = vec![1i32, 2, 3];
+    template_html!("templates/nested_loop.html", outers={outers.iter()}, inners={inners.iter()}, ...)
+}
+
+#[tokio::test(flavor = "current_thread")]
+async fn test_nested_loops() {
+    let rendered = ServerRenderer::<NestedLoopApp>::new().render().await;
+    println!("Nested-loop rendered HTML: {}", rendered);
+
+    // Outer loop: outer_loop alias, index1 and depth=0
+    assert!(rendered.contains("outer=1 depth=0"), "outer first item, correct index1 and depth");
+    assert!(rendered.contains("outer=2 depth=0"), "outer second item, correct index1 and depth");
+
+    // Inner loop: inner_loop alias; index1 resets each outer iteration, depth=1
+    // Two outer items × three inner items = 2 occurrences each
+    assert_eq!(rendered.matches("inner=1 depth=1").count(), 2, "inner first item appears once per outer");
+    assert_eq!(rendered.matches("inner=2 depth=1").count(), 2, "inner second item appears once per outer");
+    assert_eq!(rendered.matches("inner=3 depth=1").count(), 2, "inner third item appears once per outer");
+
+    // Key named-alias feature: outer_loop.index1 is accessible FROM INSIDE the inner loop
+    // The template renders "outer=N" from outer_loop.index1 inside each inner <li>
+    assert_eq!(rendered.matches("outer=1").count(), 1 + 3,   // 1 in outer <li> + 3 in inner <li>s
+               "outer index1=1 referenced both in outer <li> and in each inner <li>");
+    assert_eq!(rendered.matches("outer=2").count(), 1 + 3,
+               "outer index1=2 referenced both in outer <li> and in each inner <li>");
+
+    // Depth values are distinct
+    assert!(!rendered.contains("outer=1 depth=1"), "outer items must NOT be at depth 1");
+    assert!(!rendered.contains("inner=1 depth=0"), "inner items must NOT be at depth 0");
+}
+
+// ── loop variable tests ───────────────────────────────────────────────────────
 
 #[function_component]
 fn LoopVarsApp() -> Html {
@@ -175,31 +212,14 @@ fn PeopleApp() -> Html {
 }
 
 
-#[function_component]
-fn LegacyPeopleApp() -> Html {
-    let people = vec![
-        Person { first_name: "Alice", last_name: "Liddell" },
-        Person { first_name: "Bob", last_name: "Builder" },
-    ];
-    template_html!("templates/legacy_style_people.html", people_iter={people.iter()}, ...)
-}
-
 // Test server-side rendering with yew-template
 #[tokio::test(flavor = "current_thread")]
 async fn test_content_people_template() {
-    let new_syntax_renderer = ServerRenderer::<PeopleApp>::new();
-    let old_syntax_renderer = ServerRenderer::<LegacyPeopleApp>::new();
-    let new_rendered = new_syntax_renderer.render().await;
-    let old_rendered = old_syntax_renderer.render().await;
-    println!("Template server new_rendered HTML: {}", new_rendered);
-    println!("Template server old_rendered HTML: {}", old_rendered);
+    let renderer = ServerRenderer::<PeopleApp>::new();
+    let rendered = renderer.render().await;
+    println!("Template server rendered HTML: {}", rendered);
 
-    // Verify the new_rendered HTML contains our template content
-    assert!(new_rendered.contains("<h2>People:</h2>"), "HTML should contain the People header");
-    assert!(new_rendered.contains(r#"<div><h2>People:</h2><ul class="someclass"><li><button id="btn_Alice"></button>Alice Liddell<span>A node that will also be duplicated</span></li><li><button id="btn_Bob"></button>Bob Builder<span>A node that will also be duplicated</span></li></ul>"#), "HTML Should be an interation of LI's");
-
-    // Verify the old_rendered HTML contains our template content
-    assert!(old_rendered.contains("<h2>People:</h2>"), "HTML should contain the People header");
-    assert!(old_rendered.contains(r#"<div><h2>People:</h2><ul><li><button id="btn_Alice"></button>Alice Liddell</li><li><button id="btn_Bob"></button>Bob Builder</li></ul>"#), "HTML Should be an interation of LI's");
-
+    // Verify the rendered HTML contains our template content
+    assert!(rendered.contains("<h2>People:</h2>"), "HTML should contain the People header");
+    assert!(rendered.contains(r#"<div><h2>People:</h2><ul class="someclass"><li><button id="btn_Alice"></button>Alice Liddell<span>A node that will also be duplicated</span></li><li><button id="btn_Bob"></button>Bob Builder<span>A node that will also be duplicated</span></li></ul>"#), "HTML Should be an iteration of LI's");
 }

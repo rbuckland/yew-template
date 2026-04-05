@@ -54,17 +54,6 @@ mod template_tests {
     }
 
     #[test]
-    fn test_iter_template_old_syntax() {
-        let contributors = vec!["Alice", "Bob", "Charlie"];
-        let _html = template_html!(
-            "templates/legacy_iter.html",
-            contributors_iter={contributors.iter()},
-            ...
-        );
-        println!("✓ iter.html template (new syntax) compiled successfully");
-    }
-
-    #[test]
     fn test_people_iter_template() {
         let people = vec![
             Person { first_name: "Alice", last_name: "Smith" },
@@ -98,14 +87,12 @@ mod template_tests {
             SimpleItem { id: 1, value: 42 },
             SimpleItem { id: 2, value: 84 },
         ];
-        let contributors = vec!["Dev1", "Dev2"];
 
         let _hello = template_html!("templates/hello.html", name="Integration", ...);
         let _fields = template_html!("templates/fields.html", person, ...);
         let _opt = template_html!("templates/opt.html", name="Test", opt_age={Some(30)}, opt_birth_city={None::<&str>}, ...);
         let _present = template_html!("templates/present_if.html", condition={false}, ...);
         let _virtual = template_html!("templates/virtual.html", opt_name={Some("Virtual Test")}, ...);
-        let _iter = template_html!("templates/legacy_iter.html", contributors_iter={contributors.iter()}, ...);
         let _people = template_html!("templates/people_iter.html", people={people.iter()}, ...);
         let _simple = template_html!("templates/simple_iter.html", simple_items={items.iter()}, ...);
         let loop_items = vec!["a", "b", "c"];
@@ -114,6 +101,10 @@ mod template_tests {
         let _child = template_html!("templates/inheritance/child.html", title="Test", name="World", ...);
         // Base template used directly (blocks render their default content)
         let _base = template_html!("templates/inheritance/base.html", ...);
+        // Nested loops
+        let outers = vec!["X", "Y"];
+        let inners = vec![1i32, 2, 3];
+        let _nested = template_html!("templates/nested_loop.html", outers={outers.iter()}, inners={inners.iter()}, ...);
 
         println!(":: All templates compiled");
     }

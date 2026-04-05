@@ -54,7 +54,7 @@ fn process_attribute_expression(id: &str, opts: &mut Vec<String>, iters: &mut Ve
 /// Turns an HTML attribute to Rust code for Yew
 pub(crate) fn attr_to_code((name, value): (String, String), opts: &mut Vec<String>, iters: &mut Vec<String>, args: &Args) -> Option<String> {
     // Remove attributes used by yew-template
-    if name == "opt" || name == "iter" || name == "present-if" || name.starts_with("iter.") {
+    if name == "opt" || name == "present-if" || name == "loop_var" || name.starts_with("iter.") {
         return None
     }
 
@@ -127,7 +127,11 @@ pub(crate) fn element_to_code(el: Element, depth: usize, opts: &mut Vec<String>,
 
     // Get element properties for templating
     let opt = el.open_attrs.iter().any(|(n,_)| n=="opt");
-    let iter = el.open_attrs.iter().any(|(n,_)| n=="iter");
+
+    // Reject old bare `iter` attribute — use iter.varname={expr} instead
+    if el.open_attrs.iter().any(|(n,_)| n=="iter") {
+        abort!(args.path_span, "The bare `iter` attribute is no longer supported. Use `iter.varname={{expr}}` instead, e.g. <li iter.item={{items}}>…</li>");
+    }
 
     // Check for new iter.variable={iterator} syntax
     let iter_attr = el.open_attrs.iter().find(|(n,_)| n.starts_with("iter."));
@@ -195,32 +199,7 @@ pub(crate) fn element_to_code(el: Element, depth: usize, opts: &mut Vec<String>,
         false => opts.extend_from_slice(&inner_opts),
     }
 
-    // Handle iterated elements (old style only, new style handled earlier)
-    match iter {
-        true => {
-            // Old syntax: iter attribute with _iter prefix/suffix variables - element repeats
-            let before = inner_iters
-                .iter()
-                .map(|id| format!("let mut macro_produced_{id} = {};", args.get_val(id, &mut Vec::new(), &mut Vec::new(), args)))
-                .collect::<Vec<_>>()
-                .join("");
-            let left = inner_iters.iter().map(|id| format!("Some(macro_produced_{id})")).collect::<Vec<_>>().join(", ");
-            let right = inner_iters.iter().map(|id| format!("macro_produced_{id}.next()", )).collect::<Vec<_>>().join(", ");
-            content = content.replace('\n', "\n        ");
-            content = format!("\n\
-                {tabs}{{{{\n\
-                {tabs}{before}\n\
-                {tabs}let mut fragments = Vec::new();\n\
-                {tabs}while let ({left}) = ({right}) {{\n\
-                {tabs}    fragments.push(yew::html! {{ <> {content} \n\
-                {tabs}    </> }});\n\
-                {tabs}}}\n\
-                {tabs}fragments.into_iter().collect::<yew::Html>()\n\
-                {tabs}}}}}"
-            );
-        },
-        false => iters.extend_from_slice(&inner_iters),
-    }
+    iters.extend_from_slice(&inner_iters);
 
     // Handle optionaly present elements
     if let Some(mut present_if) = present_if {
@@ -331,11 +310,19 @@ fn handle_new_iteration_style(el: Element, var_name: &str, iter_source: &str, de
     // Get the iterator value using the args system
     let iter_value = args.get_val(iter_var, &mut Vec::new(), &mut Vec::new(), args);
 
-    // Process attributes (filtering out the iter.* attribute)
+    // Extract optional loop_var alias (default: "loop").
+    // This lets callers distinguish multiple loop levels: iter.outer={x} loop_var="outer_loop"
+    let loop_alias = el.open_attrs.iter()
+        .find(|(n, _)| n == "loop_var")
+        .map(|(_, v)| v.clone())
+        .unwrap_or_else(|| "loop".to_string());
+
+    // Process attributes (filtering out iter.* and loop_var attributes — attr_to_code also
+    // filters loop_var, but we pre-filter here for clarity)
     let mut inner_opts = Vec::new();
     let mut inner_iters = Vec::new();
     let mut f_open_attrs = el.open_attrs.into_iter()
-        .filter(|(n,_)| !n.starts_with("iter."))
+        .filter(|(n,_)| !n.starts_with("iter.") && n != "loop_var")
         .filter_map(|a| attr_to_code(a, &mut inner_opts, &mut inner_iters, args))
         .collect::<Vec<_>>()
         .join(" ");
@@ -352,38 +339,54 @@ fn handle_new_iteration_style(el: Element, var_name: &str, iter_source: &str, de
 
     let name = el.name;
 
-    // Generate children content that will repeat
+    // Compute this loop's depth and register it under the alias so that get_val can
+    // resolve alias.depth / alias.index1 etc. even from inside deeply nested loops.
+    // wrapping_add: initialised to usize::MAX so first increment yields 0.
+    let prev_loop_depth = args.loop_depth.get();
+    let new_depth = prev_loop_depth.wrapping_add(1);
+    args.loop_depth.set(new_depth);
+    args.loop_aliases.borrow_mut().insert(loop_alias.clone(), new_depth);
+
+    // Generate prefixed Rust variable names for this loop level.
+    // Using the alias as a prefix (e.g. "_yew_outer_loop_") means inner loops with a
+    // different alias don't shadow these names, so outer vars remain accessible.
+    let p = format!("_yew_{loop_alias}");
+
     let children_content = el.children.into_iter()
-        .map(|p| p.part.into_code(depth + 1, &mut inner_opts, &mut inner_iters, args))
+        .map(|p_inner| p_inner.part.into_code(depth + 1, &mut inner_opts, &mut inner_iters, args))
         .collect::<Vec<_>>()
         .join("");
+    args.loop_depth.set(prev_loop_depth);
+    // Note: alias entry intentionally NOT removed from loop_aliases after exit — this lets
+    // a child template snippet reference an outer alias by name and still get the correct depth.
+
     let children_content = children_content.replace('\n', "\n            ");
 
     opts.extend_from_slice(&inner_opts);
     iters.extend_from_slice(&inner_iters);
 
     // Generate code that creates the container with repeated children inside.
-    // Iterator is collected upfront so loop.length / loop.last / loop.previtem / loop.nextitem
+    // Iterator is collected upfront so alias.length / alias.last / alias.previtem / alias.nextitem
     // are available without a second pass.
     format!("\n{tabs}<{name}{f_open_attrs}>{{\n\
              {tabs}    {{\n\
-             {tabs}        let _yew_loop_items: Vec<_> = ({iter_value}).collect();\n\
-             {tabs}        let _yew_loop_len = _yew_loop_items.len();\n\
-             {tabs}        let mut _yew_loop_children = Vec::new();\n\
-             {tabs}        for (_yew_loop_idx, _yew_loop_item) in _yew_loop_items.iter().enumerate() {{\n\
-             {tabs}            let {var_name} = *_yew_loop_item;\n\
-             {tabs}            let _yew_loop_index0 = _yew_loop_idx;\n\
-             {tabs}            let _yew_loop_index = _yew_loop_idx + 1;\n\
-             {tabs}            let _yew_loop_first = _yew_loop_idx == 0;\n\
-             {tabs}            let _yew_loop_last = _yew_loop_idx + 1 == _yew_loop_len;\n\
-             {tabs}            let _yew_loop_length = _yew_loop_len;\n\
-             {tabs}            let _yew_loop_previtem = if _yew_loop_idx > 0 {{ Some(_yew_loop_items[_yew_loop_idx - 1]) }} else {{ None }};\n\
-             {tabs}            let _yew_loop_nextitem = _yew_loop_items.get(_yew_loop_idx + 1).copied();\n\
-             {tabs}            _yew_loop_children.push(yew::html! {{\
+             {tabs}        let {p}_items: Vec<_> = ({iter_value}).collect();\n\
+             {tabs}        let {p}_len = {p}_items.len();\n\
+             {tabs}        let mut {p}_children = Vec::new();\n\
+             {tabs}        for ({p}_idx, {p}_item) in {p}_items.iter().enumerate() {{\n\
+             {tabs}            let {var_name} = *{p}_item;\n\
+             {tabs}            let {p}_index0 = {p}_idx;\n\
+             {tabs}            let {p}_index = {p}_idx + 1;\n\
+             {tabs}            let {p}_first = {p}_idx == 0;\n\
+             {tabs}            let {p}_last = {p}_idx + 1 == {p}_len;\n\
+             {tabs}            let {p}_length = {p}_len;\n\
+             {tabs}            let {p}_previtem = if {p}_idx > 0 {{ Some({p}_items[{p}_idx - 1]) }} else {{ None }};\n\
+             {tabs}            let {p}_nextitem = {p}_items.get({p}_idx + 1).copied();\n\
+             {tabs}            {p}_children.push(yew::html! {{ <>\
              {children_content}\n\
-             {tabs}            }});\n\
+             {tabs}            </> }});\n\
              {tabs}        }}\n\
-             {tabs}        yew::Html::from_iter(_yew_loop_children)\n\
+             {tabs}        yew::Html::from_iter({p}_children)\n\
              {tabs}    }}\n\
              {tabs}}}</{name}{f_close_attrs}>")
 }

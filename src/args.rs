@@ -12,6 +12,13 @@ pub(crate) struct Args {
     auto_default: bool,
     vals: HashMap<String, TokenTree>,
     pub(crate) config: Config,
+    /// Tracks how many `iter.*` loops deep we currently are during code generation.
+    /// Uses interior mutability so it can be updated through shared `&Args` references.
+    pub(crate) loop_depth: std::cell::Cell<usize>,
+    /// Maps each registered loop alias name → the loop depth at which it was entered.
+    /// Default alias "loop" is registered dynamically on first loop entry.
+    /// Custom aliases come from the `loop_var="name"` attribute on `iter.*` elements.
+    pub(crate) loop_aliases: std::cell::RefCell<HashMap<String, usize>>,
 }
 
 pub enum ValOutput {
@@ -46,24 +53,31 @@ impl Args {
 
         let (id, field) = (get_all_before(id, "."), get_all_after_strict(id, "."));
 
-        // Special handling for loop.* pseudo-variables (only valid inside iter.var={} loops)
-        if id == "loop" {
-            let field_name = match field {
-                Some(f) => f,
-                None => abort!(args.path_span, "\"loop\" must be used with a field, e.g. loop.index"),
-            };
-            return ValOutput::String(match field_name {
-                "index"     => "_yew_loop_index0".to_string(),
-                "index1"    => "_yew_loop_index".to_string(),
-                "first"     => "_yew_loop_first".to_string(),
-                "last"      => "_yew_loop_last".to_string(),
-                "length"    => "_yew_loop_length".to_string(),
-                "depth"     => "0usize".to_string(),
-                "depth1"    => "1usize".to_string(),
-                "previtem"  => "_yew_loop_previtem".to_string(),
-                "nextitem"  => "_yew_loop_nextitem".to_string(),
-                _ => abort!(args.path_span, "Unknown loop variable \"loop.{field_name}\""),
-            });
+        // Check if this identifier is a known loop alias (e.g. "loop", or a custom "outer_loop").
+        // An alias is registered in loop_aliases when an iter.* element is processed.
+        {
+            let aliases = args.loop_aliases.borrow();
+            if aliases.contains_key(id) {
+                let alias_depth = *aliases.get(id).unwrap();
+                drop(aliases); // release borrow before potential abort!
+                let field_name = match field {
+                    Some(f) => f,
+                    None => abort!(args.path_span, "\"{id}\" is a loop alias — use it with a field, e.g. {id}.index1"),
+                };
+                let prefix = format!("_yew_{id}");
+                return ValOutput::String(match field_name {
+                    "index"    => format!("{prefix}_index0"),
+                    "index1"   => format!("{prefix}_index"),
+                    "first"    => format!("{prefix}_first"),
+                    "last"     => format!("{prefix}_last"),
+                    "length"   => format!("{prefix}_length"),
+                    "depth"    => alias_depth.to_string(),
+                    "depth1"   => (alias_depth + 1).to_string(),
+                    "previtem" => format!("{prefix}_previtem"),
+                    "nextitem" => format!("{prefix}_nextitem"),
+                    _ => abort!(args.path_span, "Unknown loop variable \"{id}.{field_name}\""),
+                });
+            }
         }
 
         if id.chars().any(|c| !c.is_alphanumeric() && c != '_') {
@@ -195,5 +209,7 @@ pub(crate) fn parse_args(args: TokenStream) -> Args {
     #[cfg(feature = "i18n")]
     let catalog = Catalog::new(&config.locale_directory);
 
-    Args { path, path_span, vals, auto_default, #[cfg(feature = "i18n")] catalog, config }
+    Args { path, path_span, vals, auto_default, #[cfg(feature = "i18n")] catalog, config,
+           loop_depth: std::cell::Cell::new(usize::MAX),
+           loop_aliases: std::cell::RefCell::new(HashMap::new()) }
 }
