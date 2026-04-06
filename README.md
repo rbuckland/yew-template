@@ -60,22 +60,10 @@ let html = yew::html! {
 ```rust
 use yew_template::template_html;
 
-let name = "World";
-let html = template_html!("templates/hello.html", name);
+let html = template_html!("templates/hello.html", name="World");
 ```
 
-Would compile to:
-
-```rust
-let name = "World";
-let html = yew::html! {
-    <div>
-        <p>{"Hello "}{name}{"!"}</p>
-    </div>
-};
-```
-
-When the name of your variable isn't the same as the name in the template, you can use the following syntax:
+Pass with different variable name:
 
 ```rust
 use yew_template::template_html;
@@ -86,54 +74,32 @@ let html = template_html!("templates/hello.html", name=other_name);
 
 ### Attributes
 
+Attributes support `format!`-like syntax with multiple interpolations:
+
 ```hbs
-<div style={{style}}>
-   <p>Hello {{name}}!</p>
-</div>
+<div style="color: {{text_color}}; background: {{bg_color}};"></div>
 ```
 
-```rust
+```rust,ignore
 use yew_template::template_html;
 
-let html = template_html!(
-    "templates/hello.html",
-    name="Yew",
-    style="color: red;"
-);
-```
-
-Yew-template supports a `format!`-like syntax in attributes, allowing you to do the following:
-
-```hbs
-<div style="background-color: {{bg_color}}; color: {{text_color}};">
-   Yew is cool
-</div>
+let html = template_html!("template.html", text_color="blue", bg_color="white");
 ```
 
 ### Struct fields
 
-Sometimes you want to pass many struct fields as variables to your template, but destructuring the struct would be too verbose.
-As when using the actual yew macro, you can just pass the struct and access its fields from the template:
+Pass a struct and access its fields directly in templates:
 
 ```hbs
-<div>
-   <p>Hello {{person.first_name}} {{person.last_name}}!</p>
-</div>
+<p>{{person.first_name}} {{person.last_name}}</p>
 ```
 
-```rust
+```rust,ignore
 use yew_template::template_html;
 
-struct Person {
-    first_name: String,
-    last_name: String,
-}
-
-let person = Person {
-    first_name: "Edouard".to_string(),
-    last_name: "Foobar".to_string()
-};
-let html = template_html!("templates/fields.html", person);
+struct Person { first_name: String, last_name: String }
+let person = Person { first_name: "John".to_string(), last_name: "Doe".to_string() };
+let html = template_html!("template.html", person);
 ```
 
 ### Expressions
@@ -340,8 +306,8 @@ Inside an `iter.*` block, a set of special `loop.*` variables are available:
 | `loop.first` | `true` on the first iteration |
 | `loop.last` | `true` on the last iteration |
 | `loop.length` | Total number of items |
-| `loop.depth` | Nesting depth, 0-indexed (always `0` — recursive loops are not supported) |
-| `loop.depth1` | Nesting depth, 1-indexed (always `1`) |
+| `loop.depth` | Nesting depth, 0-indexed (0 for outermost, increments in nested loops) |
+| `loop.depth1` | Nesting depth, 1-indexed (1 for outermost, increments in nested loops) |
 | `loop.previtem` | Item from the previous iteration (`Option<T>`), or `None` on the first |
 | `loop.nextitem` | Item from the next iteration (`Option<T>`), or `None` on the last |
 
@@ -355,9 +321,29 @@ Inside an `iter.*` block, a set of special `loop.*` variables are available:
 </ul>
 ```
 
-`loop.first` and `loop.last` are booleans and work naturally with `present-if`. `loop.index` (0-based) and `loop.index1` (1-based) are `usize` and can be used directly in text content or converted with `.to_string()` in attribute values.
+`loop.first` and `loop.last` are booleans and work naturally with `present-if`. `loop.index` and `loop.index1` are `usize` values.
 
-As of now, Yew item references in lists are not supported. This will be inmplemented in the future as the Yew documentation recommends, though the performance impact has been found to be negligible in most cases.
+#### Nested Loops with Custom Aliases
+
+Use `loop_var` to give each loop a distinct alias when nesting. This lets inner loops access outer loop variables:
+
+```hbs
+<ul iter.outer={outers} loop_var="outer">
+  <li>Outer {{outer.index1}}
+    <ul iter.inner={inners} loop_var="inner">
+      <li>Inner {{inner.index1}} of {{inner.length}}, outer is {{outer.index1}}</li>
+    </ul>
+  </li>
+</ul>
+```
+
+```rust,ignore
+use yew_template::template_html;
+
+let html = template_html!("nested.html", outers={...}, inners={...}, ...);
+```
+
+Without `loop_var`, the default alias is `"loop"`. Each custom alias maintains its own reference stack across nesting levels.
 
 ### Simplified Design
 
@@ -366,7 +352,7 @@ Embedding code in another language (e.g., SQL in Java, Bash in Python) is often 
 This is the reason to use `yew-template`, to reduce complexity.
 
 **Key Reasons It Is an Anti-Pattern**
-- I**ncreased Complexity & Reduced Readability** Mixing languages forces developers to context-switch, making the code harder to read and maintain.
+- **Increased Complexity & Reduced Readability** Mixing languages forces developers to context-switch, making the code harder to read and maintain.
 - **Syntax and Debugging Issues** Embedded code often lacks proper IDE support, such as syntax highlighting, linting, and autocomplete, making errors harder to catch.
 - **Security Vulnerabilities** Embedded strings (like SQL) are prone to injection attacks if not properly sanitized.
 - **Testing Difficulties** It is challenging to unit test code that is embedded within a string in another language.
@@ -432,7 +418,7 @@ This behavior is disabled by default because missing variables are often mistake
 
 ### Virtual elements
 
-Yew-template often requires you to add attributes on html elements such as `iter`, `opt` or `present-if`. In rare cases, you don't have any suitable element to add these attributes to, and adding a wrapper element would break your CSS. In this case, you can use virtual elements. The virtual elements tag will be removed from the final HTML but it allows you to add special attributes where they are needed.
+Yew-template requires adding attributes like `iter.var={...}`, `opt`, or `present-if` to HTML elements. In rare cases where no suitable element exists and adding a wrapper would break your CSS, use virtual elements. The `<virtual>` tag is removed from the final HTML:
 
 ```hbs
 <virtual opt>
