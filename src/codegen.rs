@@ -370,18 +370,18 @@ fn handle_new_iteration_style(el: Element, var_name: &str, iter_source: &str, de
     // are available without a second pass.
     format!("\n{tabs}<{name}{f_open_attrs}>{{\n\
              {tabs}    {{\n\
-             {tabs}        let {p}_items: Vec<_> = ({iter_value}).collect();\n\
+             {tabs}        let {p}_items: Vec<_> = ({iter_value}).into_iter().collect();\n\
              {tabs}        let {p}_len = {p}_items.len();\n\
              {tabs}        let mut {p}_children = Vec::new();\n\
              {tabs}        for ({p}_idx, {p}_item) in {p}_items.iter().enumerate() {{\n\
-             {tabs}            let {var_name} = *{p}_item;\n\
+             {tabs}            let {var_name} = {p}_item.clone();\n\
              {tabs}            let {p}_index0 = {p}_idx;\n\
              {tabs}            let {p}_index = {p}_idx + 1;\n\
              {tabs}            let {p}_first = {p}_idx == 0;\n\
              {tabs}            let {p}_last = {p}_idx + 1 == {p}_len;\n\
              {tabs}            let {p}_length = {p}_len;\n\
-             {tabs}            let {p}_previtem = if {p}_idx > 0 {{ Some({p}_items[{p}_idx - 1]) }} else {{ None }};\n\
-             {tabs}            let {p}_nextitem = {p}_items.get({p}_idx + 1).copied();\n\
+             {tabs}            let {p}_previtem = if {p}_idx > 0 {{ Some({p}_items[{p}_idx - 1].clone()) }} else {{ None }};\n\
+             {tabs}            let {p}_nextitem = {p}_items.get({p}_idx + 1).cloned();\n\
              {tabs}            {p}_children.push(yew::html! {{ <>\
              {children_content}\n\
              {tabs}            </> }});\n\
