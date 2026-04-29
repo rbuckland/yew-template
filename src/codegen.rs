@@ -75,7 +75,10 @@ pub(crate) fn attr_to_code((name, value): (String, String), opts: &mut Vec<Strin
                     let value = process_attribute_expression(id, opts, iters, args);
                     // Event-handler attributes (onclick, onchange, oninput, …) carry callbacks,
                     // not strings – wrapping them in `.to_string()` would cause a compile error.
-                    if name.starts_with("on") {
+                    // Boolean HTML attributes (checked, disabled, selected, …) carry bool values
+                    // and must also be passed through without coercion.
+                    const BOOL_ATTRS: &[&str] = &["checked", "disabled", "selected", "multiple", "readonly", "autofocus", "autoplay", "controls", "loop", "muted", "open", "required", "reversed", "hidden"];
+                    if name.starts_with("on") || BOOL_ATTRS.contains(&name.as_str()) {
                         format!("{{{value}}}")
                     } else {
                         format!("{{{value}.to_string()}}")
